@@ -1,3 +1,5 @@
+//! Data structures for storing and reclaiming retired records.
+
 use core::mem;
 
 #[cfg(not(feature = "std"))]
@@ -38,11 +40,15 @@ impl<R: LocalReclaim + 'static> BagPool<R> {
         Self((0..BAG_POOL_SIZE).map(|_| BagNode::boxed()).collect())
     }
 
+    /// Allocates a new [`BagNode`] from the pool or from the global allocator,
+    /// if the pools is currently empty.
     #[inline]
     fn allocate_bag(&mut self) -> Box<BagNode<R>> {
         self.0.pop().unwrap_or_else(BagNode::boxed)
     }
 
+    /// Recycles an empty [`BagNode`] back into the pool or deallocates it, if
+    /// the pool is currently full.
     #[inline]
     fn recycle_bag(&mut self, bag: Box<BagNode<R>>) {
         debug_assert_eq!(bag.retired_records.len(), 0);
@@ -168,6 +174,7 @@ pub struct BagQueue<R: LocalReclaim + 'static> {
 }
 
 impl<R: LocalReclaim + 'static> BagQueue<R> {
+    /// Consumes `self`
     #[inline]
     pub fn into_non_empty(self) -> Option<Self> {
         if !self.is_empty() {
@@ -177,6 +184,7 @@ impl<R: LocalReclaim + 'static> BagQueue<R> {
         }
     }
 
+    /// Creates a new [`BagQueue`].
     #[inline]
     fn new() -> Self {
         Self {
@@ -202,6 +210,8 @@ impl<R: LocalReclaim + 'static> BagQueue<R> {
         }
     }
 
+    /// Reclaims all records in all **full** bags.
+    ///
     /// # Safety
     ///
     /// It must be ensured that the contents of the queue are at least two
@@ -243,6 +253,7 @@ struct BagNode<R: LocalReclaim + 'static> {
 }
 
 impl<R: LocalReclaim> BagNode<R> {
+    /// Creates a new boxed [`BagNode`].
     #[inline]
     fn boxed() -> Box<Self> {
         Box::new(Self {
