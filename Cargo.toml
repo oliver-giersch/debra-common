@@ -1,7 +1,19 @@
 [package]
 name = "debra-common"
 version = "0.1.0"
-authors = ["Oliver Giersch <oliver.giersch@b-tu.de>"]
+authors = ["Oliver Giersch"]
 edition = "2018"
 
-[dependencies]
+[features]
+default = ["std"]
+
+# must be disabled for use in no_std crates
+std = ["arrayvec/std", "reclaim/std"]
+
+[dependencies.arrayvec]
+version = "0.4.10"
+default-features = false
+
+[dependencies.reclaim]
+version = "0.1.0"
+default-features = false
