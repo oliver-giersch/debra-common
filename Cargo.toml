@@ -1,0 +1,7 @@
+[package]
+name = "debra-common"
+version = "0.1.0"
+authors = ["Oliver Giersch <oliver.giersch@b-tu.de>"]
+edition = "2018"
+
+[dependencies]
