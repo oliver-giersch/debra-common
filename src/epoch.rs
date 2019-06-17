@@ -18,7 +18,7 @@ impl AtomicEpoch {
         Self(AtomicUsize::new(0))
     }
 
-    /// Loads the [`Epoch`].
+    /// Loads the [`Epoch`] value.
     ///
     /// `load` takes an [`Ordering`][ordering] argument, which describes the
     /// memory ordering of this operation.

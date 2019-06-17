@@ -174,7 +174,8 @@ pub struct BagQueue<R: LocalReclaim + 'static> {
 }
 
 impl<R: LocalReclaim + 'static> BagQueue<R> {
-    /// Consumes `self`
+    /// Consumes `self`, returning it again if it is non-empty, otherwise
+    /// returning [`None`] and dropping the [`BagQueue`].
     #[inline]
     pub fn into_non_empty(self) -> Option<Self> {
         if !self.is_empty() {
@@ -198,7 +199,10 @@ impl<R: LocalReclaim + 'static> BagQueue<R> {
         self.head.retired_records.len() == 0 && self.head.next.is_none()
     }
 
-    /// Retires the given `record` .
+    /// Retires the given `record`.
+    ///
+    /// If the operation requires a new bag to be allocated, it is attempted to
+    /// be taken from `bag_pool`.
     #[inline]
     fn retire_record(&mut self, record: Retired<R>, bag_pool: &mut BagPool<R>) {
         // the head bag is guaranteed to never be full
