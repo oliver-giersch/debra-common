@@ -51,7 +51,7 @@ impl<R: Reclaim + 'static> BagPool<R> {
     /// the pool is currently full.
     #[inline]
     fn recycle_bag(&mut self, bag: Box<BagNode<R>>) {
-        debug_assert_eq!(bag.retired_records.len(), 0);
+        debug_assert!(bag.is_empty());
         if let Err(cap) = self.0.try_push(bag) {
             mem::drop(cap.element());
         }
@@ -176,17 +176,18 @@ pub struct BagQueue<R: Reclaim + 'static> {
 }
 
 impl<R: Reclaim + 'static> BagQueue<R> {
-    /// Consumes `self`, returning it again if it is non-empty, otherwise
-    /// returning [`None`] and dropping the [`BagQueue`].
+    /// Consumes `self`, returning the internal head [`BagNode`], it is
+    /// non-empty, otherwise returning [`None`] and dropping the [`BagQueue`].
     #[inline]
-    pub fn into_non_empty(self) -> Option<Self> {
+    pub fn into_non_empty(self) -> Option<Box<BagNode<R>>> {
         if !self.is_empty() {
-            Some(self)
+            Some(self.head)
         } else {
             None
         }
     }
 
+    /*
     /// Reclaims all records prior to the [`BagQueue`] being dropped.
     ///
     /// # Safety
@@ -194,14 +195,14 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     /// It must be ensured that the contents of the queue are at least two
     /// epochs old.
     #[inline]
-    pub unsafe fn reclaim_all_pre_drop(&mut self) {
+    pub unsafe fn pre_drop(&mut self) {
         self.head.reclaim_all();
         let mut node = self.head.next.take();
         while let Some(mut bag) = node {
             bag.reclaim_all();
             node = bag.next.take();
         }
-    }
+    }*/
 
     /// Creates a new [`BagQueue`].
     #[inline]
@@ -212,7 +213,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     /// Returns `true` if the head node is both empty and has no successor.
     #[inline]
     fn is_empty(&self) -> bool {
-        self.head.retired_records.len() == 0 && self.head.next.is_none()
+        self.head.is_empty()
     }
 
     /// Retires the given `record`.
@@ -247,7 +248,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     }
 }
 
-impl<R: Reclaim + 'static> Drop for BagQueue<R> {
+/*impl<R: Reclaim + 'static> Drop for BagQueue<R> {
     #[inline]
     fn drop(&mut self) {
         assert!(
@@ -255,7 +256,7 @@ impl<R: Reclaim + 'static> Drop for BagQueue<R> {
             "`BagQueue`s must not be dropped when there are still un-reclaimed records"
         );
     }
-}
+}*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BagNode
@@ -265,18 +266,12 @@ const DEFAULT_BAG_SIZE: usize = 256;
 
 /// A linked list node containing an inline vector for storing retired records.
 #[derive(Debug)]
-struct BagNode<R: Reclaim + 'static> {
+pub struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
     retired_records: ArrayVec<[Retired<R>; DEFAULT_BAG_SIZE]>,
 }
 
 impl<R: Reclaim> BagNode<R> {
-    /// Creates a new boxed [`BagNode`].
-    #[inline]
-    fn boxed() -> Box<Self> {
-        Box::new(Self { next: None, retired_records: ArrayVec::default() })
-    }
-
     /// Reclaims all retired records in this [`BagNode`].
     ///
     /// # Safety
@@ -284,10 +279,41 @@ impl<R: Reclaim> BagNode<R> {
     /// It must be ensured that the contents of the queue are at least two
     /// epochs old.
     #[inline]
-    unsafe fn reclaim_all(&mut self) {
+    pub unsafe fn reclaim_all(&mut self) {
+        self.reclaim_inner();
+
+        let mut curr = self.next.take();
+        while let Some(mut node) = curr {
+            node.reclaim_inner();
+            curr = node.next.take();
+        }
+    }
+
+    /// Creates a new boxed [`BagNode`].
+    #[inline]
+    fn boxed() -> Box<Self> {
+        Box::new(Self { next: None, retired_records: ArrayVec::default() })
+    }
+
+    /// Returns `true` if the [`BagNode`] is empty.
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.next.is_none() && self.retired_records.len() == 0
+    }
+
+    #[inline]
+    unsafe fn reclaim_inner(&mut self) {
         for mut record in self.retired_records.drain(..) {
             record.reclaim();
         }
+    }
+}
+
+impl<R: Reclaim + 'static> Drop for BagNode<R> {
+    #[inline]
+    fn drop(&mut self) {
+        // unproblematic, as bag nodes are rarely dropped
+        assert!(self.is_empty(), "`BagNode`s must not be dropped unless empty (would leak memory)");
     }
 }
 
@@ -304,9 +330,9 @@ mod tests {
     type BagQueue = super::BagQueue<Leaking>;
     type Retired = reclaim::Retired<Leaking>;
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     // BagQueue tests
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
     /// A factory for dummy retired records.
     fn retired() -> Retired {
@@ -317,6 +343,7 @@ mod tests {
     #[test]
     fn empty_bag_queue() {
         let bag_queue = BagQueue::new();
+        assert!(bag_queue.is_empty());
         assert!(bag_queue.into_non_empty().is_none());
     }
 
@@ -334,37 +361,43 @@ mod tests {
         assert!(bag_queue.head.next.is_none());
 
         bag_queue.retire_record(retired(), &mut pool);
-        // head node is empty but has a next node
+        // head node is empty but has a `next` node (the previous head)
         assert_eq!(bag_queue.head.retired_records.len(), 0);
         assert!(bag_queue.head.next.is_some());
         assert!(!bag_queue.is_empty());
 
-        let mut non_empty = bag_queue.into_non_empty().unwrap();
+        let mut node = bag_queue.into_non_empty().unwrap();
         // bag queues must never be dropped when there are still retired records
         // in them (would be a memory leak)
-        unsafe { non_empty.reclaim_all_pre_drop() };
+        unsafe { node.reclaim_all() };
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     // EpochBagQueues tests
-    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
     #[test]
     fn rotate_and_reclaim() {
         let mut pool = BagPool::new();
 
         let mut bags = EpochBagQueues::new();
+        // insert one bag worth of records + one record (allocates a new node)
         for _ in 0..=DEFAULT_BAG_SIZE {
             bags.retire_record(retired(), &mut pool);
         }
 
-        // one full bag is reclaimed and returned to pool, one retired record
-        // remains in the old bag.
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        // upon completing the cycle, one full bag is reclaimed and returned to
+        // pool, one retired record remains in the old bag.
         unsafe { bags.rotate_and_reclaim(&mut pool) };
 
-        assert_eq!(pool.0.len(), 0);
+        assert_eq!(pool.0.len(), 1);
         assert_eq!(bags.queues[0].head.retired_records.len(), 1);
 
-        unsafe { bags.queues[0].reclaim_all_pre_drop() };
+        unsafe { bags.queues[0].head.reclaim_all() };
     }
+
+    #[test]
+    fn retire_by_age() {}
 }
