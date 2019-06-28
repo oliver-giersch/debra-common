@@ -47,10 +47,7 @@ impl ThreadState {
     #[inline]
     pub fn load(&self, order: Ordering) -> (Epoch, State) {
         let state = self.0.load(order);
-        (
-            Epoch::with_epoch(state & !INACTIVE_BIT),
-            State::from(state & INACTIVE_BIT == 0),
-        )
+        (Epoch::with_epoch(state & !INACTIVE_BIT), State::from(state & INACTIVE_BIT == 0))
     }
 
     /// Stores an `epoch` and a `state` into the current thread state.
@@ -115,5 +112,56 @@ impl fmt::Display for State {
             Active => write!(f, "active"),
             Inactive => write!(f, "inactive"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use crate::epoch::Epoch;
+
+    use super::{
+        State::{self, Active, Inactive},
+        ThreadState,
+    };
+
+    #[test]
+    fn thread_state_equality() {
+        let epoch = Epoch::with_epoch(128);
+        let thread_state = ThreadState::new(epoch);
+        let other_thread_state = ThreadState::new(epoch);
+
+        assert!(thread_state.is_same(&thread_state));
+        assert!(!thread_state.is_same(&other_thread_state));
+    }
+
+    #[test]
+    fn load_thread_state() {
+        let init_epoch = Epoch::with_epoch(128);
+        let thread_state = ThreadState::new(init_epoch);
+        let (epoch, state) = thread_state.load(Ordering::Relaxed);
+
+        assert_eq!(init_epoch, epoch);
+        assert_eq!(state, Inactive);
+    }
+
+    #[test]
+    fn store_thread_state() {
+        let init_epoch = Epoch::with_epoch(1000);
+        let thread_state = ThreadState::new(init_epoch);
+        let next_epoch = init_epoch + 1;
+
+        thread_state.store(next_epoch, Active, Ordering::Relaxed);
+        let (epoch, state) = thread_state.load(Ordering::Relaxed);
+
+        assert_eq!(epoch, next_epoch);
+        assert_eq!(state, Active);
+    }
+
+    #[test]
+    fn from_bool() {
+        assert_eq!(Active, State::from(true));
+        assert_eq!(Inactive, State::from(false));
     }
 }
