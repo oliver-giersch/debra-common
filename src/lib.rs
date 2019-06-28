@@ -12,6 +12,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+pub use arrayvec;
 pub use reclaim;
 
 use reclaim::{Reclaim, Retired};
