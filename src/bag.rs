@@ -1,9 +1,9 @@
 //! Data structures for storing and reclaiming retired records.
 
-use core::mem;
-
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
+
+use core::mem;
 
 use arrayvec::ArrayVec;
 use reclaim::{Reclaim, Retired};
@@ -86,10 +86,7 @@ impl<R: Reclaim + 'static> EpochBagQueues<R> {
     /// Creates a new set of [`EpochBagQueues`].
     #[inline]
     pub fn new() -> Self {
-        Self {
-            queues: [BagQueue::new(), BagQueue::new(), BagQueue::new()],
-            curr_idx: 0,
-        }
+        Self { queues: [BagQueue::new(), BagQueue::new(), BagQueue::new()], curr_idx: 0 }
     }
 
     /// Sorts the set of [`BagQueues`] from most recent to oldest and returns
@@ -168,6 +165,11 @@ impl<R: Reclaim + 'static> EpochBagQueues<R> {
 /// All nodes except the first one are guaranteed to be full and the first one
 /// is guaranteed to always have enough space for at least one additional
 /// record.
+///
+/// # Note
+///
+/// A [`BagQueue`] must never be dropped when there are still un-reclaimed
+/// retired records in any of its [`BagNode`]s.
 #[derive(Debug)]
 pub struct BagQueue<R: Reclaim + 'static> {
     head: Box<BagNode<R>>,
@@ -204,9 +206,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     /// Creates a new [`BagQueue`].
     #[inline]
     fn new() -> Self {
-        Self {
-            head: BagNode::boxed(),
-        }
+        Self { head: BagNode::boxed() }
     }
 
     /// Returns `true` if the head node is both empty and has no successor.
@@ -250,10 +250,10 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 impl<R: Reclaim + 'static> Drop for BagQueue<R> {
     #[inline]
     fn drop(&mut self) {
-        let mut curr = self.head.next.take();
-        while let Some(mut node) = curr {
-            curr = node.next.take();
-        }
+        assert!(
+            self.head.retired_records.len() == 0 && self.head.next.is_none(),
+            "`BagQueue`s must not be dropped when there are still un-reclaimed records"
+        );
     }
 }
 
@@ -263,6 +263,7 @@ impl<R: Reclaim + 'static> Drop for BagQueue<R> {
 
 const DEFAULT_BAG_SIZE: usize = 256;
 
+/// A linked list node containing an inline vector for storing retired records.
 #[derive(Debug)]
 struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
@@ -273,10 +274,7 @@ impl<R: Reclaim> BagNode<R> {
     /// Creates a new boxed [`BagNode`].
     #[inline]
     fn boxed() -> Box<Self> {
-        Box::new(Self {
-            next: None,
-            retired_records: ArrayVec::default(),
-        })
+        Box::new(Self { next: None, retired_records: ArrayVec::default() })
     }
 
     /// Reclaims all retired records in this [`BagNode`].
@@ -290,5 +288,83 @@ impl<R: Reclaim> BagNode<R> {
         for mut record in self.retired_records.drain(..) {
             record.reclaim();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ptr::NonNull;
+
+    use reclaim::leak::Leaking;
+
+    use super::DEFAULT_BAG_SIZE;
+
+    type EpochBagQueues = super::EpochBagQueues<Leaking>;
+    type BagPool = super::BagPool<Leaking>;
+    type BagQueue = super::BagQueue<Leaking>;
+    type Retired = reclaim::Retired<Leaking>;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // BagQueue tests
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// A factory for dummy retired records.
+    fn retired() -> Retired {
+        let ptr: NonNull<()> = NonNull::dangling();
+        unsafe { Retired::new_unchecked(ptr) }
+    }
+
+    #[test]
+    fn empty_bag_queue() {
+        let bag_queue = BagQueue::new();
+        assert!(bag_queue.into_non_empty().is_none());
+    }
+
+    #[test]
+    fn non_empty_bag_queue() {
+        let mut pool = BagPool::new();
+
+        let mut bag_queue = BagQueue::new();
+        for _ in 0..DEFAULT_BAG_SIZE - 1 {
+            bag_queue.retire_record(retired(), &mut pool);
+        }
+
+        // head is almost full and is the only node
+        assert!(!bag_queue.is_empty());
+        assert!(bag_queue.head.next.is_none());
+
+        bag_queue.retire_record(retired(), &mut pool);
+        // head node is empty but has a next node
+        assert_eq!(bag_queue.head.retired_records.len(), 0);
+        assert!(bag_queue.head.next.is_some());
+        assert!(!bag_queue.is_empty());
+
+        let mut non_empty = bag_queue.into_non_empty().unwrap();
+        // bag queues must never be dropped when there are still retired records
+        // in them (would be a memory leak)
+        unsafe { non_empty.reclaim_all_pre_drop() };
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // EpochBagQueues tests
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    #[test]
+    fn rotate_and_reclaim() {
+        let mut pool = BagPool::new();
+
+        let mut bags = EpochBagQueues::new();
+        for _ in 0..=DEFAULT_BAG_SIZE {
+            bags.retire_record(retired(), &mut pool);
+        }
+
+        // one full bag is reclaimed and returned to pool, one retired record
+        // remains in the old bag.
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+
+        assert_eq!(pool.0.len(), 0);
+        assert_eq!(bags.queues[0].head.retired_records.len(), 1);
+
+        unsafe { bags.queues[0].reclaim_all_pre_drop() };
     }
 }
