@@ -6,7 +6,7 @@ use core::mem;
 use alloc::boxed::Box;
 
 use arrayvec::ArrayVec;
-use reclaim::{LocalReclaim, Retired};
+use reclaim::{Reclaim, Retired};
 
 use crate::epoch::PossibleAge;
 
@@ -18,16 +18,16 @@ const BAG_POOL_SIZE: usize = 16;
 
 /// A pool for storing and recycling no longer used [`BagNode`]s of a thread.
 #[derive(Debug)]
-pub struct BagPool<R: LocalReclaim + 'static>(ArrayVec<[Box<BagNode<R>>; BAG_POOL_SIZE]>);
+pub struct BagPool<R: Reclaim + 'static>(ArrayVec<[Box<BagNode<R>>; BAG_POOL_SIZE]>);
 
-impl<R: LocalReclaim + 'static> Default for BagPool<R> {
+impl<R: Reclaim + 'static> Default for BagPool<R> {
     #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<R: LocalReclaim + 'static> BagPool<R> {
+impl<R: Reclaim + 'static> BagPool<R> {
     /// Creates a new (empty) [`BagPool`].
     #[inline]
     pub fn new() -> Self {
@@ -70,19 +70,19 @@ const BAG_QUEUE_COUNT: usize = 3;
 /// and these are continuously recycled, as the oldest records are reclaimed
 /// when the global epoch is advanced.
 #[derive(Debug)]
-pub struct EpochBagQueues<R: LocalReclaim + 'static> {
+pub struct EpochBagQueues<R: Reclaim + 'static> {
     queues: [BagQueue<R>; BAG_QUEUE_COUNT],
     curr_idx: usize,
 }
 
-impl<R: LocalReclaim + 'static> Default for EpochBagQueues<R> {
+impl<R: Reclaim + 'static> Default for EpochBagQueues<R> {
     #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<R: LocalReclaim + 'static> EpochBagQueues<R> {
+impl<R: Reclaim + 'static> EpochBagQueues<R> {
     /// Creates a new set of [`EpochBagQueues`].
     #[inline]
     pub fn new() -> Self {
@@ -169,11 +169,11 @@ impl<R: LocalReclaim + 'static> EpochBagQueues<R> {
 /// is guaranteed to always have enough space for at least one additional
 /// record.
 #[derive(Debug)]
-pub struct BagQueue<R: LocalReclaim + 'static> {
+pub struct BagQueue<R: Reclaim + 'static> {
     head: Box<BagNode<R>>,
 }
 
-impl<R: LocalReclaim + 'static> BagQueue<R> {
+impl<R: Reclaim + 'static> BagQueue<R> {
     /// Consumes `self`, returning it again if it is non-empty, otherwise
     /// returning [`None`] and dropping the [`BagQueue`].
     #[inline]
@@ -234,7 +234,7 @@ impl<R: LocalReclaim + 'static> BagQueue<R> {
     }
 }
 
-impl<R: LocalReclaim + 'static> Drop for BagQueue<R> {
+impl<R: Reclaim + 'static> Drop for BagQueue<R> {
     #[inline]
     fn drop(&mut self) {
         let mut curr = self.head.next.take();
@@ -251,12 +251,12 @@ impl<R: LocalReclaim + 'static> Drop for BagQueue<R> {
 const DEFAULT_BAG_SIZE: usize = 256;
 
 #[derive(Debug)]
-struct BagNode<R: LocalReclaim + 'static> {
+struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
     retired_records: ArrayVec<[Retired<R>; DEFAULT_BAG_SIZE]>,
 }
 
-impl<R: LocalReclaim> BagNode<R> {
+impl<R: Reclaim> BagNode<R> {
     /// Creates a new boxed [`BagNode`].
     #[inline]
     fn boxed() -> Box<Self> {

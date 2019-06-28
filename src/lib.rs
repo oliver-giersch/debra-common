@@ -14,7 +14,7 @@ extern crate alloc;
 
 pub use reclaim;
 
-use reclaim::{LocalReclaim, Retired};
+use reclaim::{Reclaim, Retired};
 
 pub mod bag;
 pub mod epoch;
@@ -27,7 +27,7 @@ where
     Self: Clone + Copy + Sized,
 {
     /// The concrete reclamation scheme type.
-    type Reclaimer: LocalReclaim;
+    type Reclaimer: Reclaim;
 
     /// Marks the associated thread as active.
     fn set_active(self);

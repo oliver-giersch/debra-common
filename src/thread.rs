@@ -5,6 +5,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::epoch::Epoch;
 
+use self::State::{Active, Inactive};
+
 const INACTIVE_BIT: usize = 0b1;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,8 +68,8 @@ impl ThreadState {
     #[inline]
     pub fn store(&self, epoch: Epoch, state: State, order: Ordering) {
         match state {
-            State::Active => self.0.store(epoch.into_inner(), order),
-            State::Inactive => self.0.store(epoch.into_inner() | INACTIVE_BIT, order),
+            Active => self.0.store(epoch.into_inner(), order),
+            Inactive => self.0.store(epoch.into_inner() | INACTIVE_BIT, order),
         };
     }
 }
@@ -99,9 +101,9 @@ impl From<bool> for State {
     #[inline]
     fn from(is_active: bool) -> Self {
         if is_active {
-            State::Active
+            Active
         } else {
-            State::Inactive
+            Inactive
         }
     }
 }
@@ -110,8 +112,8 @@ impl fmt::Display for State {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            State::Active => write!(f, "active"),
-            State::Inactive => write!(f, "inactive"),
+            Active => write!(f, "active"),
+            Inactive => write!(f, "inactive"),
         }
     }
 }
