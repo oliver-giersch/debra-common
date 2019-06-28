@@ -185,6 +185,22 @@ impl<R: Reclaim + 'static> BagQueue<R> {
         }
     }
 
+    /// Reclaims all records prior to the [`BagQueue`] being dropped.
+    ///
+    /// # Safety
+    ///
+    /// It must be ensured that the contents of the queue are at least two
+    /// epochs old.
+    #[inline]
+    pub unsafe fn reclaim_all_pre_drop(&mut self) {
+        self.head.reclaim_all();
+        let mut node = self.head.next.take();
+        while let Some(mut bag) = node {
+            bag.reclaim_all();
+            node = bag.next.take();
+        }
+    }
+
     /// Creates a new [`BagQueue`].
     #[inline]
     fn new() -> Self {
@@ -224,11 +240,8 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     unsafe fn reclaim_full_bags(&mut self, bag_pool: &mut BagPool<R>) {
         let mut node = self.head.next.take();
         while let Some(mut bag) = node {
+            bag.reclaim_all();
             node = bag.next.take();
-            for mut record in bag.retired_records.drain(..) {
-                record.reclaim();
-            }
-
             bag_pool.recycle_bag(bag);
         }
     }
@@ -264,5 +277,18 @@ impl<R: Reclaim> BagNode<R> {
             next: None,
             retired_records: ArrayVec::default(),
         })
+    }
+
+    /// Reclaims all retired records in this [`BagNode`].
+    ///
+    /// # Safety
+    ///
+    /// It must be ensured that the contents of the queue are at least two
+    /// epochs old.
+    #[inline]
+    unsafe fn reclaim_all(&mut self) {
+        for mut record in self.retired_records.drain(..) {
+            record.reclaim();
+        }
     }
 }
