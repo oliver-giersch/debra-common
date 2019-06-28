@@ -11,6 +11,8 @@
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 pub use arrayvec;
 pub use reclaim;

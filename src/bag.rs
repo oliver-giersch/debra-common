@@ -187,23 +187,6 @@ impl<R: Reclaim + 'static> BagQueue<R> {
         }
     }
 
-    /*
-    /// Reclaims all records prior to the [`BagQueue`] being dropped.
-    ///
-    /// # Safety
-    ///
-    /// It must be ensured that the contents of the queue are at least two
-    /// epochs old.
-    #[inline]
-    pub unsafe fn pre_drop(&mut self) {
-        self.head.reclaim_all();
-        let mut node = self.head.next.take();
-        while let Some(mut bag) = node {
-            bag.reclaim_all();
-            node = bag.next.take();
-        }
-    }*/
-
     /// Creates a new [`BagQueue`].
     #[inline]
     fn new() -> Self {
@@ -247,16 +230,6 @@ impl<R: Reclaim + 'static> BagQueue<R> {
         }
     }
 }
-
-/*impl<R: Reclaim + 'static> Drop for BagQueue<R> {
-    #[inline]
-    fn drop(&mut self) {
-        assert!(
-            self.head.retired_records.len() == 0 && self.head.next.is_none(),
-            "`BagQueue`s must not be dropped when there are still un-reclaimed records"
-        );
-    }
-}*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BagNode
@@ -323,7 +296,8 @@ mod tests {
 
     use reclaim::leak::Leaking;
 
-    use super::DEFAULT_BAG_SIZE;
+    use super::{BAG_QUEUE_COUNT, DEFAULT_BAG_SIZE};
+    use crate::epoch::PossibleAge;
 
     type EpochBagQueues = super::EpochBagQueues<Leaking>;
     type BagPool = super::BagPool<Leaking>;
@@ -399,5 +373,57 @@ mod tests {
     }
 
     #[test]
-    fn retire_by_age() {}
+    fn retire_by_age() {
+        let mut pool = BagPool::new();
+
+        // insert enough records so that the head node in all three epoch bags
+        // is one record away from being full, so no full bags are reclaimed on
+        // rotation
+        let mut bags = EpochBagQueues::new();
+        for _ in 0..BAG_QUEUE_COUNT {
+            for _ in 0..DEFAULT_BAG_SIZE - 1 {
+                bags.retire_record(retired(), &mut pool);
+                unsafe { bags.rotate_and_reclaim(&mut pool) };
+            }
+        }
+        // this is inserted into the currently oldest bag queue at index 1
+        bags.retire_record_by_age(retired(), PossibleAge::TwoEpochs, &mut pool);
+        assert_eq!(bags.curr_idx, 0);
+        assert_eq!(bags.queues[1].head.retired_records.len(), 0);
+        assert!(bags.queues[1].head.next.is_some());
+
+        // rotates the epoch bags to index 1 and reclaims one full bag there
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        assert_eq!(pool.0.len(), 1);
+
+        // this is inserted into the previous bag queue at index 0
+        bags.retire_record_by_age(retired(), PossibleAge::OneEpoch, &mut pool);
+        assert_eq!(bags.curr_idx, 1);
+        assert_eq!(bags.queues[0].head.retired_records.len(), 0);
+        assert!(bags.queues[0].head.next.is_some());
+
+        // rotates the epoch bags to index 2
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+
+        // this is inserted into the current bag queue at index 2
+        bags.retire_record_by_age(retired(), PossibleAge::SameEpoch, &mut pool);
+        assert_eq!(bags.curr_idx, 2);
+        // one bag has been re-allocated from the pool
+        assert_eq!(pool.0.len(), 0);
+        assert_eq!(bags.queues[2].head.retired_records.len(), 0);
+        assert!(bags.queues[2].head.next.is_some());
+
+        // rotates the epoch bags to index 0 and reclaims one full bag there
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        assert_eq!(bags.curr_idx, 0);
+        assert_eq!(pool.0.len(), 1);
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        assert_eq!(bags.curr_idx, 1);
+        // rotates the epoch bags to index 2 and reclaims one full bag there
+        unsafe { bags.rotate_and_reclaim(&mut pool) };
+        assert_eq!(bags.curr_idx, 2);
+        assert_eq!(pool.0.len(), 2);
+
+        // all epoch queues are empty again
+    }
 }

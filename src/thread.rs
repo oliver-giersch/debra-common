@@ -117,7 +117,7 @@ impl fmt::Display for State {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::Ordering::Relaxed;
 
     use crate::epoch::Epoch;
 
@@ -140,7 +140,7 @@ mod tests {
     fn load_thread_state() {
         let init_epoch = Epoch::with_epoch(128);
         let thread_state = ThreadState::new(init_epoch);
-        let (epoch, state) = thread_state.load(Ordering::Relaxed);
+        let (epoch, state) = thread_state.load(Relaxed);
 
         assert_eq!(init_epoch, epoch);
         assert_eq!(state, Inactive);
@@ -152,8 +152,8 @@ mod tests {
         let thread_state = ThreadState::new(init_epoch);
         let next_epoch = init_epoch + 1;
 
-        thread_state.store(next_epoch, Active, Ordering::Relaxed);
-        let (epoch, state) = thread_state.load(Ordering::Relaxed);
+        thread_state.store(next_epoch, Active, Relaxed);
+        let (epoch, state) = thread_state.load(Relaxed);
 
         assert_eq!(epoch, next_epoch);
         assert_eq!(state, Active);
