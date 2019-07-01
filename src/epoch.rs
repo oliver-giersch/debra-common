@@ -82,7 +82,7 @@ impl fmt::Display for Epoch {
 // AtomicEpoch
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A concurrently accessible [`Epoch`].
+/// An atomic and concurrently accessible [`Epoch`].
 pub struct AtomicEpoch(AtomicUsize);
 
 impl AtomicEpoch {

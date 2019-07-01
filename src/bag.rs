@@ -238,6 +238,10 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 const DEFAULT_BAG_SIZE: usize = 256;
 
 /// A linked list node containing an inline vector for storing retired records.
+///
+/// # Panics
+///
+/// Dropping a non-empty [`BagNode`] leads to a panic in debug mode.
 #[derive(Debug)]
 pub struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
@@ -285,8 +289,10 @@ impl<R: Reclaim> BagNode<R> {
 impl<R: Reclaim + 'static> Drop for BagNode<R> {
     #[inline]
     fn drop(&mut self) {
-        // unproblematic, as bag nodes are rarely dropped
-        assert!(self.is_empty(), "`BagNode`s must not be dropped unless empty (would leak memory)");
+        debug_assert!(
+            self.is_empty(),
+            "`BagNode`s must not be dropped unless empty (would leak memory)"
+        );
     }
 }
 
@@ -386,40 +392,47 @@ mod tests {
                 unsafe { bags.rotate_and_reclaim(&mut pool) };
             }
         }
-        // this is inserted into the currently oldest bag queue at index 1
+
+        // insert a record in the oldest bag at index 1
+        // this allocates a new bag from the global allocator
         bags.retire_record_by_age(retired(), PossibleAge::TwoEpochs, &mut pool);
         assert_eq!(bags.curr_idx, 0);
         assert_eq!(bags.queues[1].head.retired_records.len(), 0);
         assert!(bags.queues[1].head.next.is_some());
 
-        // rotates the epoch bags to index 1 and reclaims one full bag there
+        // rotates the epoch bags to index 1 and reclaims one full bag there,
+        // returning it to the pool
         unsafe { bags.rotate_and_reclaim(&mut pool) };
         assert_eq!(pool.0.len(), 1);
 
-        // this is inserted into the previous bag queue at index 0
+        // insert a record in the previous bag at index 0
+        // this allocates a new bag from the pool
         bags.retire_record_by_age(retired(), PossibleAge::OneEpoch, &mut pool);
         assert_eq!(bags.curr_idx, 1);
         assert_eq!(bags.queues[0].head.retired_records.len(), 0);
         assert!(bags.queues[0].head.next.is_some());
+        assert_eq!(pool.0.len(), 0);
 
-        // rotates the epoch bags to index 2
+        // rotates the epoch bags to index 2, no bag is reclaimed
         unsafe { bags.rotate_and_reclaim(&mut pool) };
 
-        // this is inserted into the current bag queue at index 2
+        // insert a record in the current bag at index 2
+        // this allocates a new bag from the pool
         bags.retire_record_by_age(retired(), PossibleAge::SameEpoch, &mut pool);
         assert_eq!(bags.curr_idx, 2);
-        // one bag has been re-allocated from the pool
         assert_eq!(pool.0.len(), 0);
         assert_eq!(bags.queues[2].head.retired_records.len(), 0);
         assert!(bags.queues[2].head.next.is_some());
 
-        // rotates the epoch bags to index 0 and reclaims one full bag there
+        // rotates the epoch bags to index 0 and reclaims one full bag there,
+        // returning it to the pool
         unsafe { bags.rotate_and_reclaim(&mut pool) };
         assert_eq!(bags.curr_idx, 0);
         assert_eq!(pool.0.len(), 1);
         unsafe { bags.rotate_and_reclaim(&mut pool) };
         assert_eq!(bags.curr_idx, 1);
-        // rotates the epoch bags to index 2 and reclaims one full bag there
+        // rotates the epoch bags to index 2 and reclaims one full bag there,
+        //returning it to the pool
         unsafe { bags.rotate_and_reclaim(&mut pool) };
         assert_eq!(bags.curr_idx, 2);
         assert_eq!(pool.0.len(), 2);
