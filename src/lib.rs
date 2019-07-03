@@ -1,5 +1,5 @@
-/// Common types, traits and base functionality for the DEBRA reclamation
-/// scheme.
+//! Common types, traits and base functionality for the DEBRA reclamation
+//! scheme.
 //!
 //! This crate forms the common basis for both the `debra` and `debra-simple`
 //! crates.
