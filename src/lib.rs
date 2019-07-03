@@ -39,3 +39,9 @@ where
     /// Retires an unlinked record in the local cache.
     fn retire_record(self, record: Retired<Self::Reclaimer>);
 }
+
+include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
+
+/// The value of the configurable per-thread size for individual bags storing
+/// cached retired records.
+pub const EPOCH_CACHE_SIZE: usize = DEBRA_EPOCH_CACHE_SIZE;

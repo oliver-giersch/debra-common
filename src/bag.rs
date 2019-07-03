@@ -9,6 +9,7 @@ use arrayvec::ArrayVec;
 use reclaim::{Reclaim, Retired};
 
 use crate::epoch::PossibleAge;
+use crate::EPOCH_CACHE_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BagPool
@@ -235,8 +236,6 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 // BagNode
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
-
 /// A linked list node containing an inline vector for storing retired records.
 ///
 /// # Panics
@@ -245,7 +244,7 @@ include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 #[derive(Debug)]
 pub struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
-    retired_records: ArrayVec<[Retired<R>; DEFAULT_BAG_SIZE]>,
+    retired_records: ArrayVec<[Retired<R>; EPOCH_CACHE_SIZE]>,
 }
 
 impl<R: Reclaim> BagNode<R> {
@@ -302,7 +301,7 @@ mod tests {
 
     use reclaim::leak::Leaking;
 
-    use super::{BAG_QUEUE_COUNT, DEFAULT_BAG_SIZE};
+    use super::{BAG_QUEUE_COUNT, EPOCH_CACHE_SIZE};
     use crate::epoch::PossibleAge;
 
     type EpochBagQueues = super::EpochBagQueues<Leaking>;
@@ -332,7 +331,7 @@ mod tests {
         let mut pool = BagPool::new();
 
         let mut bag_queue = BagQueue::new();
-        for _ in 0..DEFAULT_BAG_SIZE - 1 {
+        for _ in 0..EPOCH_CACHE_SIZE - 1 {
             bag_queue.retire_record(retired(), &mut pool);
         }
 
@@ -362,7 +361,7 @@ mod tests {
 
         let mut bags = EpochBagQueues::new();
         // insert one bag worth of records + one record (allocates a new node)
-        for _ in 0..=DEFAULT_BAG_SIZE {
+        for _ in 0..=EPOCH_CACHE_SIZE {
             bags.retire_record(retired(), &mut pool);
         }
 
@@ -387,7 +386,7 @@ mod tests {
         // rotation
         let mut bags = EpochBagQueues::new();
         for _ in 0..BAG_QUEUE_COUNT {
-            for _ in 0..DEFAULT_BAG_SIZE - 1 {
+            for _ in 0..EPOCH_CACHE_SIZE - 1 {
                 bags.retire_record(retired(), &mut pool);
                 unsafe { bags.rotate_and_reclaim(&mut pool) };
             }

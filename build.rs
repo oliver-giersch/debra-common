@@ -23,6 +23,6 @@ fn main() {
         panic!("invalid DEBRA_EPOCH_CACHE_SIZE value (too large)");
     }
 
-    write!(&mut file, "const DEFAULT_BAG_SIZE: usize = {};", size)
+    write!(&mut file, "const DEBRA_EPOCH_CACHE_SIZE: usize = {};", size)
         .expect("could not write to file");
 }
