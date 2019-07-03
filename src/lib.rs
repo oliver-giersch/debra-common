@@ -1,7 +1,5 @@
-//! Common types and traits for implementing the DEBRA memory reclamation
-//! scheme.
-//!
-//! # NOT INTENDED FOR GENERAL USE!
+/// Common types, traits and base functionality for the DEBRA reclamation
+/// scheme.
 //!
 //! This crate forms the common basis for both the `debra` and `debra-simple`
 //! crates.

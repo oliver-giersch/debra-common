@@ -235,7 +235,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 // BagNode
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-const DEFAULT_BAG_SIZE: usize = 256;
+include!(concat!(env!("OUT_DIR"), "/build_constants.rs"));
 
 /// A linked list node containing an inline vector for storing retired records.
 ///
