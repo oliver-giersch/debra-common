@@ -1,7 +1,7 @@
 [package]
 name = "debra-common"
 description = "Common types, traits and base functionality for the DEBRA reclamation scheme."
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Oliver Giersch"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -22,5 +22,5 @@ version = "0.4.10"
 default-features = false
 
 [dependencies.reclaim]
-version = "0.2.0"
+version = "0.2.1"
 default-features = false
