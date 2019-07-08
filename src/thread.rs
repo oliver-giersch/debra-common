@@ -18,6 +18,8 @@ const INACTIVE_BIT: usize = 0b1;
 #[derive(Debug)]
 pub struct ThreadState(AtomicUsize);
 
+/***** impl inherent ******************************************************************************/
+
 impl ThreadState {
     /// Creates a new [`ThreadState`] for the current `global_epoch` and in
     /// [`Inactive`][State::Inactive] state.
@@ -71,6 +73,8 @@ impl ThreadState {
     }
 }
 
+/***** impl Display *******************************************************************************/
+
 impl fmt::Display for ThreadState {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -94,6 +98,8 @@ pub enum State {
     Inactive,
 }
 
+/***** impl From **********************************************************************************/
+
 impl From<bool> for State {
     #[inline]
     fn from(is_active: bool) -> Self {
@@ -104,6 +110,8 @@ impl From<bool> for State {
         }
     }
 }
+
+/***** impl Display *******************************************************************************/
 
 impl fmt::Display for State {
     #[inline]

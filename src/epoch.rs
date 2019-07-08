@@ -14,6 +14,8 @@ const EPOCH_INCREMENT: usize = 2;
 #[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Epoch(usize);
 
+/***** impl inherent ******************************************************************************/
+
 impl Epoch {
     /// Creates a new [`Epoch`] starting at zero.
     #[inline]
@@ -53,6 +55,8 @@ impl Epoch {
     }
 }
 
+/***** impl Add ***********************************************************************************/
+
 impl Add<usize> for Epoch {
     type Output = Self;
 
@@ -62,6 +66,8 @@ impl Add<usize> for Epoch {
     }
 }
 
+/***** impl Sub ***********************************************************************************/
+
 impl Sub<usize> for Epoch {
     type Output = Self;
 
@@ -70,6 +76,8 @@ impl Sub<usize> for Epoch {
         Self(self.0.wrapping_sub(rhs * EPOCH_INCREMENT))
     }
 }
+
+/***** impl Display *******************************************************************************/
 
 impl fmt::Display for Epoch {
     #[inline]
@@ -84,6 +92,8 @@ impl fmt::Display for Epoch {
 
 /// An atomic and concurrently accessible [`Epoch`].
 pub struct AtomicEpoch(AtomicUsize);
+
+/***** impl inherent ******************************************************************************/
 
 impl AtomicEpoch {
     /// Creates a new [`AtomicEpoch`] starting at zero.
@@ -135,12 +145,16 @@ impl AtomicEpoch {
     }
 }
 
+/***** impl Debug *********************************************************************************/
+
 impl fmt::Debug for AtomicEpoch {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("AtomicEpoch").field("epoch", &self.0.load(Ordering::SeqCst)).finish()
     }
 }
+
+/***** impl Display *******************************************************************************/
 
 impl fmt::Display for AtomicEpoch {
     #[inline]
@@ -167,6 +181,8 @@ pub enum PossibleAge {
     TwoEpochs,
 }
 
+/***** impl Display *******************************************************************************/
+
 impl fmt::Display for PossibleAge {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -186,6 +202,8 @@ impl fmt::Display for PossibleAge {
 /// definitely older than two epochs.
 #[derive(Debug, Default, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Undetermined;
+
+/***** impl Display *******************************************************************************/
 
 impl fmt::Display for Undetermined {
     #[inline]
