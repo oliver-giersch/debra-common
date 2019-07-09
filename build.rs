@@ -8,8 +8,6 @@ const DEFAULT_SIZE: usize = 256;
 const MAX_SIZE: usize = 4096;
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=DEBRA_EPOCH_CACHE_SIZE");
-
     let out_dir = env::var("OUT_DIR").expect("no out directory");
     let dest = Path::new(&out_dir).join("build_constants.rs");
 
