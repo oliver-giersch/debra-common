@@ -21,12 +21,16 @@ const BAG_POOL_SIZE: usize = 16;
 #[derive(Debug)]
 pub struct BagPool<R: Reclaim + 'static>(ArrayVec<[Box<BagNode<R>>; BAG_POOL_SIZE]>);
 
+/***** impl Default *******************************************************************************/
+
 impl<R: Reclaim + 'static> Default for BagPool<R> {
     #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
+
+/***** impl inherent ******************************************************************************/
 
 impl<R: Reclaim + 'static> BagPool<R> {
     /// Creates a new (empty) [`BagPool`].
@@ -76,12 +80,16 @@ pub struct EpochBagQueues<R: Reclaim + 'static> {
     curr_idx: usize,
 }
 
+/***** impl Default *******************************************************************************/
+
 impl<R: Reclaim + 'static> Default for EpochBagQueues<R> {
     #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
+
+/***** impl inherent ******************************************************************************/
 
 impl<R: Reclaim + 'static> EpochBagQueues<R> {
     /// Creates a new set of [`EpochBagQueues`].
@@ -176,6 +184,8 @@ pub struct BagQueue<R: Reclaim + 'static> {
     head: Box<BagNode<R>>,
 }
 
+/***** impl inherent ******************************************************************************/
+
 impl<R: Reclaim + 'static> BagQueue<R> {
     /// Consumes `self`, returning the internal head [`BagNode`], it is
     /// non-empty, otherwise returning [`None`] and dropping the [`BagQueue`].
@@ -247,6 +257,8 @@ pub struct BagNode<R: Reclaim + 'static> {
     retired_records: ArrayVec<[Retired<R>; EPOCH_CACHE_SIZE]>,
 }
 
+/***** impl inherent ******************************************************************************/
+
 impl<R: Reclaim> BagNode<R> {
     /// Reclaims all retired records in this [`BagNode`].
     ///
@@ -284,6 +296,8 @@ impl<R: Reclaim> BagNode<R> {
         }
     }
 }
+
+/***** impl Drop **********************************************************************************/
 
 impl<R: Reclaim + 'static> Drop for BagNode<R> {
     #[inline]
