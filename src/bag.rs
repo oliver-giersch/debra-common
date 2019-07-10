@@ -9,7 +9,6 @@ use arrayvec::ArrayVec;
 use reclaim::{Reclaim, Retired};
 
 use crate::epoch::PossibleAge;
-use crate::EPOCH_CACHE_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BagPool
@@ -68,6 +67,7 @@ impl<R: Reclaim + 'static> BagPool<R> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const BAG_QUEUE_COUNT: usize = 3;
+const MAX_BAG_SIZE: usize = 256;
 
 /// A ring buffer with three [`BagQueue`]s
 ///
@@ -85,7 +85,7 @@ pub struct EpochBagQueues<R: Reclaim + 'static> {
 impl<R: Reclaim + 'static> Default for EpochBagQueues<R> {
     #[inline]
     fn default() -> Self {
-        Self::new()
+        Self::new(MAX_BAG_SIZE)
     }
 }
 
@@ -94,8 +94,16 @@ impl<R: Reclaim + 'static> Default for EpochBagQueues<R> {
 impl<R: Reclaim + 'static> EpochBagQueues<R> {
     /// Creates a new set of [`EpochBagQueues`].
     #[inline]
-    pub fn new() -> Self {
-        Self { queues: [BagQueue::new(), BagQueue::new(), BagQueue::new()], curr_idx: 0 }
+    pub fn new(max_bag_size: usize) -> Self {
+        assert!(max_bag_size > 0 && max_bag_size <= MAX_BAG_SIZE);
+        Self {
+            queues: [
+                BagQueue::new(max_bag_size),
+                BagQueue::new(max_bag_size),
+                BagQueue::new(max_bag_size),
+            ],
+            curr_idx: 0,
+        }
     }
 
     /// Sorts the set of [`BagQueues`] from most recent to oldest and returns
@@ -181,6 +189,7 @@ impl<R: Reclaim + 'static> EpochBagQueues<R> {
 /// retired records in any of its [`BagNode`]s.
 #[derive(Debug)]
 pub struct BagQueue<R: Reclaim + 'static> {
+    max_bag_size: usize,
     head: Box<BagNode<R>>,
 }
 
@@ -200,8 +209,8 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 
     /// Creates a new [`BagQueue`].
     #[inline]
-    fn new() -> Self {
-        Self { head: BagNode::boxed() }
+    fn new(max_bag_size: usize) -> Self {
+        Self { max_bag_size, head: BagNode::boxed() }
     }
 
     /// Returns `true` if the head node is both empty and has no successor.
@@ -218,7 +227,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
     fn retire_record(&mut self, record: Retired<R>, bag_pool: &mut BagPool<R>) {
         // the head bag is guaranteed to never be full
         unsafe { self.head.retired_records.push_unchecked(record) };
-        if self.head.retired_records.is_full() {
+        if self.head.retired_records.len() == self.max_bag_size {
             let mut old_head = bag_pool.allocate_bag();
             mem::swap(&mut self.head, &mut old_head);
             self.head.next = Some(old_head);
@@ -254,7 +263,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 #[derive(Debug)]
 pub struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
-    retired_records: ArrayVec<[Retired<R>; EPOCH_CACHE_SIZE]>,
+    retired_records: ArrayVec<[Retired<R>; MAX_BAG_SIZE]>,
 }
 
 /***** impl inherent ******************************************************************************/
@@ -315,7 +324,7 @@ mod tests {
 
     use reclaim::leak::Leaking;
 
-    use super::{BAG_QUEUE_COUNT, EPOCH_CACHE_SIZE};
+    use super::{BAG_QUEUE_COUNT, MAX_BAG_SIZE};
     use crate::epoch::PossibleAge;
 
     type EpochBagQueues = super::EpochBagQueues<Leaking>;
@@ -335,7 +344,7 @@ mod tests {
 
     #[test]
     fn empty_bag_queue() {
-        let bag_queue = BagQueue::new();
+        let bag_queue = BagQueue::new(MAX_BAG_SIZE);
         assert!(bag_queue.is_empty());
         assert!(bag_queue.into_non_empty().is_none());
     }
@@ -344,8 +353,8 @@ mod tests {
     fn non_empty_bag_queue() {
         let mut pool = BagPool::new();
 
-        let mut bag_queue = BagQueue::new();
-        for _ in 0..EPOCH_CACHE_SIZE - 1 {
+        let mut bag_queue = BagQueue::new(MAX_BAG_SIZE);
+        for _ in 0..MAX_BAG_SIZE - 1 {
             bag_queue.retire_record(retired(), &mut pool);
         }
 
@@ -373,9 +382,9 @@ mod tests {
     fn rotate_and_reclaim() {
         let mut pool = BagPool::new();
 
-        let mut bags = EpochBagQueues::new();
+        let mut bags = EpochBagQueues::new(MAX_BAG_SIZE);
         // insert one bag worth of records + one record (allocates a new node)
-        for _ in 0..=EPOCH_CACHE_SIZE {
+        for _ in 0..=MAX_BAG_SIZE {
             bags.retire_record(retired(), &mut pool);
         }
 
@@ -398,9 +407,9 @@ mod tests {
         // insert enough records so that the head node in all three epoch bags
         // is one record away from being full, so no full bags are reclaimed on
         // rotation
-        let mut bags = EpochBagQueues::new();
+        let mut bags = EpochBagQueues::new(MAX_BAG_SIZE);
         for _ in 0..BAG_QUEUE_COUNT {
-            for _ in 0..EPOCH_CACHE_SIZE - 1 {
+            for _ in 0..MAX_BAG_SIZE - 1 {
                 bags.retire_record(retired(), &mut pool);
                 unsafe { bags.rotate_and_reclaim(&mut pool) };
             }
