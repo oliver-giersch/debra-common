@@ -6,10 +6,36 @@ use alloc::boxed::Box;
 use core::mem;
 
 use arrayvec::ArrayVec;
+use cfg_if::cfg_if;
 use reclaim::{Reclaim, Retired};
 
 use crate::epoch::PossibleAge;
-use crate::EPOCH_CACHE_SIZE;
+
+cfg_if! {
+    if #[cfg(feature = "bag-size-1")] {
+        const BAG_SIZE: usize = 1;
+    } else if #[cfg(feature = "bag-size-2")] {
+        const BAG_SIZE: usize = 2;
+    } else if #[cfg(feature = "bag-size-4")] {
+        const BAG_SIZE: usize = 4;
+    } else if #[cfg(feature = "bag-size-8")] {
+        const BAG_SIZE: usize = 8;
+    } else if #[cfg(feature = "bag-size-16")] {
+        const BAG_SIZE: usize = 16;
+    } else if #[cfg(feature = "bag-size-32")] {
+        const BAG_SIZE: usize = 32;
+    } else if #[cfg(feature = "bag-size-64")] {
+        const BAG_SIZE: usize = 64;
+    } else if #[cfg(feature = "bag-size-128")] {
+        const BAG_SIZE: usize = 128;
+    } else if #[cfg(feature = "bag-size-256")] {
+        const BAG_SIZE: usize = 256;
+    } else if #[cfg(feature = "bag-size-512")] {
+        const BAG_SIZE: usize = 512;
+    } else {
+        const BAG_SIZE: usize = 256;
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BagPool
@@ -254,7 +280,7 @@ impl<R: Reclaim + 'static> BagQueue<R> {
 #[derive(Debug)]
 pub struct BagNode<R: Reclaim + 'static> {
     next: Option<Box<BagNode<R>>>,
-    retired_records: ArrayVec<[Retired<R>; EPOCH_CACHE_SIZE]>,
+    retired_records: ArrayVec<[Retired<R>; BAG_SIZE]>,
 }
 
 /***** impl inherent ******************************************************************************/
@@ -315,7 +341,7 @@ mod tests {
 
     use reclaim::leak::Leaking;
 
-    use super::{BAG_QUEUE_COUNT, EPOCH_CACHE_SIZE};
+    use super::{BAG_QUEUE_COUNT, BAG_SIZE};
     use crate::epoch::PossibleAge;
 
     type EpochBagQueues = super::EpochBagQueues<Leaking>;
@@ -345,7 +371,7 @@ mod tests {
         let mut pool = BagPool::new();
 
         let mut bag_queue = BagQueue::new();
-        for _ in 0..EPOCH_CACHE_SIZE - 1 {
+        for _ in 0..BAG_SIZE - 1 {
             bag_queue.retire_record(retired(), &mut pool);
         }
 
@@ -375,7 +401,7 @@ mod tests {
 
         let mut bags = EpochBagQueues::new();
         // insert one bag worth of records + one record (allocates a new node)
-        for _ in 0..=EPOCH_CACHE_SIZE {
+        for _ in 0..=BAG_SIZE {
             bags.retire_record(retired(), &mut pool);
         }
 
@@ -400,7 +426,7 @@ mod tests {
         // rotation
         let mut bags = EpochBagQueues::new();
         for _ in 0..BAG_QUEUE_COUNT {
-            for _ in 0..EPOCH_CACHE_SIZE - 1 {
+            for _ in 0..BAG_SIZE - 1 {
                 bags.retire_record(retired(), &mut pool);
                 unsafe { bags.rotate_and_reclaim(&mut pool) };
             }

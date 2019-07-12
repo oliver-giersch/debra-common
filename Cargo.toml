@@ -1,14 +1,13 @@
 [package]
 name = "debra-common"
 description = "Common types, traits and base functionality for the DEBRA reclamation scheme."
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Oliver Giersch"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/oliver-giersch/debra-common.git"
 documentation = "https://docs.rs/debra-common"
 edition = "2018"
-build = "build.rs"
 exclude = [".travis.yml", "ci/*"]
 
 [features]
@@ -16,6 +15,20 @@ default = ["std"]
 
 # must be disabled for use in no_std crates
 std = ["arrayvec/std", "reclaim/std"]
+
+bag-size-1 = []
+bag-size-2 = []
+bag-size-4 = []
+bag-size-8 = []
+bag-size-16 = []
+bag-size-32 = []
+bag-size-64 = []
+bag-size-128 = []
+bag-size-256 = []
+bag-size-512 = []
+
+[dependencies]
+cfg-if = "0.1.9"
 
 [dependencies.arrayvec]
 version = "0.4.10"
