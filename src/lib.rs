@@ -33,7 +33,7 @@ where
     /// Returns `true` if the current thread is already active.
     fn is_active(self) -> bool;
     /// Marks the associated thread as active.
-    fn set_active(self);
+    fn set_active(self) -> Self;
     /// Marks the associated thread as inactive.
     fn set_inactive(self);
     /// Retires an unlinked record in the local cache.
