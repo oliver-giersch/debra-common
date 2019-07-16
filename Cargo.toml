@@ -16,13 +16,13 @@ default = ["std"]
 # must be disabled for use in no_std crates
 std = ["arrayvec/std", "reclaim/std"]
 
-bag-size-1 = []
-bag-size-2 = []
-bag-size-4 = []
-bag-size-8 = []
-bag-size-16 = []
-bag-size-32 = []
-bag-size-64 = []
+bag-size-1   = []
+bag-size-2   = []
+bag-size-4   = []
+bag-size-8   = []
+bag-size-16  = []
+bag-size-32  = []
+bag-size-64  = []
 bag-size-128 = []
 bag-size-256 = []
 bag-size-512 = []
@@ -31,9 +31,9 @@ bag-size-512 = []
 cfg-if = "0.1.9"
 
 [dependencies.arrayvec]
-version = "0.4.10"
+version = "0.4.11"
 default-features = false
 
 [dependencies.reclaim]
-version = "0.2.1"
+version = "0.2.2"
 default-features = false
